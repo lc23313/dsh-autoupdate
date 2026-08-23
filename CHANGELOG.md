@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.1 (2026-08-23) — hotfix
+
+修复 v1.1.0 在真实 dsh web 环境中的通道注册失败：
+
+- **问题**：`connection.rpc.handle(...)` 第三个参数 `options` 必填（含 `authority` 字段），v1.1.0 漏传，宿主读 `options.authority` 时抛 `Cannot read properties of undefined`，UI 走"更新服务不可用"降级。
+- **修复**：`lib/channel.js` 改为 `rpc.handle(CHANNEL, handler, { authority: "loopback" })`——loopback 信任保证只有本地 dsh web 的同源 fetch 能命中通道。
+
+仅 1 行代码改动；其它代码、文档、配置无变更。
+
 ## v1.1.0 (2026-08-23)
 
 新增手动触发更新 UI（设置页集成），触发规则从"静默自动检测"改为"手动点击检测"。**原有更新逻辑（检测/定点安装/双验证/回滚/断路器）一行未改。**
