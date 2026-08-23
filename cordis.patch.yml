@@ -1,0 +1,27 @@
+# dsh-autoupdate bundle patch: inserts the auto-update plugin row.
+#
+# The row `name` resolves the plugin package from the profile's node_modules
+# (installed via `dsh plugin --profile <name> add <path-to-this-package>`).
+# Keys under `config:` are the defaults; a user may override this row by id in
+# the profile's own cordis.patch.yml (`- id: auto-update` + a `config:` block).
+# A user-layer row replaces the whole config of this row, but omitted keys
+# still fall back to the schema defaults applied by the plugin itself.
+- insert:
+    - id: auto-update
+      name: dsh-autoupdate
+      config:
+        enabled: true
+        channel: latest
+        autoApply: true
+        checkIntervalMs: 21600000
+        startupDelayMs: 30000
+        maxConsecutiveFailures: 3
+        cooldownMs: 86400000
+        npmTimeoutMs: 30000
+        installTimeoutMs: 300000
+        npmCommand: npm
+        dshCommand: dsh
+        registry: ""
+        updateProfilePlugins: true
+        profiles: []
+        logToConsole: true

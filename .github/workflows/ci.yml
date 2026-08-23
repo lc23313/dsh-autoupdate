@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dsh (needed by the smoke test's version fallbacks)
+        run: npm install -g @deepseek-ai/dsh
+
+      - name: Syntax check
+        shell: bash
+        run: |
+          for f in lib/*.js scripts/*.mjs; do
+            node --check "$f"
+          done
+
+      - name: Smoke test (real detection cycle, autoApply forced off)
+        run: node scripts/dev-smoke.mjs
