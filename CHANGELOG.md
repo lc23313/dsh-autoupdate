@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.2 (2026-08-23) — CI hardening
+
+不影响插件运行时，仅收紧 CI 稳定性：
+
+- `.github/workflows/ci.yml`：job 与各 step 加 `timeout-minutes`；`npm install -g` 加 `--no-audit --no-fund` 加速。
+- `scripts/dev-smoke.mjs`：当环境里找不到 dsh（argv[1] / `dsh --version` / `npm root -g` 三层全失败）时，**软跳过** `installedVersion` 断言（仅 `WARN`，不视为失败），避免 CI runner 没装 dsh 把插件本身没问题也判定红。
+- `scripts/ui-smoke.mjs`：修复 B1/B2 在 CI 环境失败——Node ≥21 自带只读 `navigator`（`language: "en"`），组件走英文回退，断言写死的 `"检查更新"` 匹配不到。改用 `Object.defineProperty` 模拟 `zh-CN` 浏览器 + 断言正则兼容中英文（`/检查更新|Check for Updates/`），测试与 locale 解耦。
+
 ## v1.1.1 (2026-08-23) — hotfix
 
 修复 v1.1.0 在真实 dsh web 环境中的通道注册失败：

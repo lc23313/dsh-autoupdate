@@ -11,6 +11,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +20,8 @@ jobs:
           node-version: 22
 
       - name: Install dsh (needed by the smoke test's version fallbacks)
-        run: npm install -g @deepseek-ai/dsh
+        timeout-minutes: 5
+        run: npm install -g @deepseek-ai/dsh --no-audit --no-fund
 
       - name: Syntax check
         shell: bash
@@ -29,7 +31,9 @@ jobs:
           done
 
       - name: Smoke test (real detection cycle, autoApply forced off)
+        timeout-minutes: 3
         run: node scripts/dev-smoke.mjs
 
       - name: UI smoke test (client module + channel handler, offline)
+        timeout-minutes: 1
         run: node scripts/ui-smoke.mjs

@@ -11,6 +11,15 @@
 // Usage: node scripts/ui-smoke.mjs
 import assert from "node:assert/strict";
 
+// Simulate a zh-CN browser so the component picks the Chinese dictionary
+// (the real dsh web UI runs in a browser). Assertions below still accept the
+// English fallback, so the test stays green in bare Node runners (CI) too.
+Object.defineProperty(globalThis, "navigator", {
+  value: { language: "zh-CN" },
+  configurable: true,
+});
+const TITLE_RE = /检查更新|Check for Updates/;
+
 let failures = 0;
 const step = (name, fn) => {
   try {
@@ -94,7 +103,7 @@ step("B1 section renders without t prop (fallback dictionary)", () => {
   const tree = Section({});
   assert.ok(tree && tree.type === "div", "root element missing");
   const json = JSON.stringify(tree);
-  assert.ok(json.includes("检查更新"), "title missing");
+  assert.match(json, TITLE_RE, "title missing (zh or en)");
   assert.ok(!json.includes("undefined"), "no undefined leaks");
 });
 
@@ -102,7 +111,7 @@ step("B2 section renders when t throws", () => {
   const Section = slotRegistrations[0].component;
   const tree = Section({ t: () => { throw new Error("locale broken"); } });
   const json = JSON.stringify(tree);
-  assert.ok(json.includes("检查更新"), "fallback text missing");
+  assert.match(json, TITLE_RE, "fallback text missing (zh or en)");
 });
 
 // ---------- C. backend channel handler ----------

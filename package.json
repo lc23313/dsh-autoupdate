@@ -1,6 +1,6 @@
 {
   "name": "dsh-autoupdate",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Built-in auto-update plugin for dsh (DeepSeek Harness): manual update check from the Settings page, guarded update pipeline with health check, automatic rollback, circuit breaker and degrade ladders.",
   "type": "module",
   "main": "lib/index.js",
