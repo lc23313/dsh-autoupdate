@@ -31,6 +31,7 @@ const ctx = {
 await apply(ctx, {
   enabled: true,
   autoApply: false, // smoke test never arms the update helper
+  autoCheck: true, // v1.1.0: explicitly exercise the periodic-check path
   startupDelayMs: 200,
   checkIntervalMs: 3600000,
   logToConsole: true,

@@ -30,3 +30,6 @@ jobs:
 
       - name: Smoke test (real detection cycle, autoApply forced off)
         run: node scripts/dev-smoke.mjs
+
+      - name: UI smoke test (client module + channel handler, offline)
+        run: node scripts/ui-smoke.mjs

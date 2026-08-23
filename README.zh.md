@@ -1,9 +1,11 @@
 # dsh-autoupdate — dsh 内置自动更新插件
 
-一个嵌入 dsh 内部运行的 Cordis 插件：自动检测 `@deepseek-ai/dsh` 新版本，并在 dsh 退出后自动执行带健康检查与自动回滚的更新事务，把"手动 npm install + 手动刷 profile"压缩为零操作。
+一个嵌入 dsh 内部运行的 Cordis 插件：在 dsh 设置页提供【检查更新】按钮，点击后检测 `@deepseek-ai/dsh` 新版本，弹窗确认后在 dsh 退出时自动执行带健康检查与自动回滚的更新事务，把"手动 npm install + 手动刷 profile"压缩为两次点击。
 
 [English README](./README.md)
 
+- 设置页 UI（v1.1.0）：设置 → 自动更新 里的【检查更新】按钮；有新版本弹窗显示版本信息 +【确认更新】【取消】；已最新弹窗提示"当前已是最新版本，暂无可用更新"
+- 手动触发（v1.1.0）：默认不做任何静默周期检测，只有点按钮才检测（配置 `autoCheck: true` 可恢复 v1.0.0 的自动模式）
 - 更新通道：npm dist-tag（`latest` / `rc` / 任意已发布 tag）
 - 更新目标：**精确固定版本 + 精确安装前缀**（从运行中的 dsh 进程反推，不依赖 PATH 上的 npm 指向哪里）
 - 应用时机：**dsh 进程退出后**（detached helper 轮询父进程退出，规避 Windows 文件锁；即使 dsh 被强杀，已武装的更新仍会执行）
@@ -44,7 +46,7 @@ dsh plugin --profile web add github:lc23313/dsh-autoupdate
 
 # ③ 从源码目录 / 离线 tarball 安装（pnpm 以本地路径链接，源目录须长期存在）
 dsh plugin --profile web add /path/to/dsh-autoupdate
-dsh plugin --profile web add /path/to/dsh-autoupdate-1.0.0.tgz
+dsh plugin --profile web add /path/to/dsh-autoupdate-1.1.0.tgz
 ```
 
 dsh 会：初始化 profile 工作区 → pnpm 安装该包 → 因其 `package.json` 声明了 `dsh.bundle.patch`，自动把它加入 `dsh.profile.bundles` 层列表。
@@ -89,7 +91,8 @@ DSH_AUTOUPDATE_DOCTOR=1 dsh web
 | `enabled`                   | `true`        | 总开关；`false` 时插件空转                   |
 | `channel`                   | `"latest"`    | npm dist-tag 通道；找不到时回落 `latest`     |
 | `autoApply`                 | `true`        | `false` = 只检测+通知（手动模式），给出一条手动升级命令   |
-| `checkIntervalMs`           | `21600000`    | 检查间隔（6 小时；下限 5 分钟）                  |
+| `autoCheck`                 | `false`       | v1.1.0：`false` = 手动模式（仅设置页按钮触发检测）；`true` = 恢复 v1.0.0 周期检测 |
+| `checkIntervalMs`           | `21600000`    | `autoCheck: true` 时的检查间隔（6 小时；下限 5 分钟）   |
 | `startupDelayMs`            | `30000`       | 启动后延迟首检，避免拖慢 dsh 启动                 |
 | `maxConsecutiveFailures`    | `3`           | 连续失败 N 次降级为 notify，2N 次降级为 off      |
 | `cooldownMs`                | `86400000`    | 应用失败后的冷却期（默认 24 小时内不再自动应用）          |

@@ -1,11 +1,19 @@
 # dsh-autoupdate bundle patch: inserts the auto-update plugin row.
 #
 # The row `name` resolves the plugin package from the profile's node_modules
-# (installed via `dsh plugin --profile <name> add <path-to-this-package>`).
+# (installed via `dsh plugin --profile <name> add <pkg>`). One row serves both
+# halves: cordis loads the backend entry (lib/index.js) in the dsh process,
+# and the web host discovers the browser half (lib/client.js) from the
+# package's `dsh.client` declaration.
+#
 # Keys under `config:` are the defaults; a user may override this row by id in
 # the profile's own cordis.patch.yml (`- id: auto-update` + a `config:` block).
 # A user-layer row replaces the whole config of this row, but omitted keys
 # still fall back to the schema defaults applied by the plugin itself.
+#
+# v1.1.0: `autoCheck: false` — manual mode. Version detection only runs when
+# the user clicks 检查更新 in the Settings page; set autoCheck: true to
+# restore the v1.0.0 silent periodic checks.
 - insert:
     - id: auto-update
       name: dsh-autoupdate
@@ -13,6 +21,7 @@
         enabled: true
         channel: latest
         autoApply: true
+        autoCheck: false
         checkIntervalMs: 21600000
         startupDelayMs: 30000
         maxConsecutiveFailures: 3

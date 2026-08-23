@@ -1,18 +1,20 @@
 # dsh-autoupdate
 
-A built-in auto-update plugin for [dsh](https://github.com/deepseek-ai/deepseek-harness) (DeepSeek Harness). It runs inside every booted dsh profile, detects new `@deepseek-ai/dsh` releases on npm, and applies them as a **guarded update transaction** — after the dsh process exits, with health verification and automatic rollback. No more manual `npm install -g` rounds.
+A built-in auto-update plugin for [dsh](https://github.com/deepseek-ai/deepseek-harness) (DeepSeek Harness). It adds a **检查更新 (Check for Updates)** section to the dsh Settings page: one click checks npm for a new `@deepseek-ai/dsh` release, a confirm dialog schedules it, and a **guarded update transaction** — exit-time install, health verification, automatic rollback — does the rest.
 
 [中文文档 (Chinese README)](./README.zh.md)
 
 ## Highlights
 
+- **Settings-page UI (v1.1.0)**: 检查更新 button under Settings → 自动更新; modal shows version info with 确认更新 / 取消, or "当前已是最新版本，暂无可用更新"
+- **Manual by default (v1.1.0)**: no silent periodic checks — detection runs only on the button click (`autoCheck: true` restores the v1.0.0 periodic mode)
 - **Update channel**: any npm dist-tag (`latest`, `rc`, …)
 - **Exit-time application**: a detached helper waits for the dsh process to exit before touching the global install — avoids Windows file locks and survives even a killed dsh
 - **Targeted install**: resolves the *running* dsh's own npm prefix (from `process.argv[1]`) and installs into it with `--prefix` — immune to multi-Node PATH confusion
 - **Transaction safety**: exact-version install → dual verification (manifest + actually running the new binary) → automatic rollback to the previous version on any failure
 - **Circuit breaker**: consecutive failures degrade `auto → notify → off`; any success restores full automation
 - **Optional profile refresh**: after a CLI update, user plugins in your profiles can be refreshed via `dsh plugin --profile <p> update` (with manifest backup/restore)
-- **Breaking-update survivability**: zero runtime dependencies, no dsh internal API calls — see [docs/COMPATIBILITY.zh.md](./docs/COMPATIBILITY.zh.md) for the full six-layer defense design
+- **Breaking-update survivability**: zero runtime dependencies, no dsh internal API calls on the backend; the UI uses only the settings-section slot, a generic RPC channel, and plain same-origin fetch — see [docs/COMPATIBILITY.zh.md](./docs/COMPATIBILITY.zh.md) and [docs/UI.zh.md](./docs/UI.zh.md)
 
 ## Install
 
@@ -26,7 +28,7 @@ dsh plugin --profile web add dsh-autoupdate
 dsh plugin --profile web add github:lc23313/dsh-autoupdate
 
 # from a local tarball (offline sharing)
-dsh plugin --profile web add /path/to/dsh-autoupdate-1.0.0.tgz
+dsh plugin --profile web add /path/to/dsh-autoupdate-1.1.0.tgz
 ```
 
 Verify it was registered as a profile layer, then restart dsh:
@@ -53,7 +55,8 @@ Defaults live in the package's own `cordis.patch.yml`; override them per profile
 | `enabled`                   | `true`        | Master switch; `false` = no-op                                                   |
 | `channel`                   | `"latest"`    | npm dist-tag to track; falls back to `latest`                                    |
 | `autoApply`                 | `true`        | `false` = detect + notify only (prints a manual command)                         |
-| `checkIntervalMs`           | `21600000`    | Check interval (6 h; floor 5 min)                                                |
+| `autoCheck`                 | `false`       | v1.1.0: `false` = manual mode (Settings button only); `true` = v1.0.0 periodic checks |
+| `checkIntervalMs`           | `21600000`    | Check interval when `autoCheck: true` (6 h; floor 5 min)                         |
 | `startupDelayMs`            | `30000`       | Delay before the first check after boot                                          |
 | `maxConsecutiveFailures`    | `3`           | N failures → `notify`, 2N → `off`                                                |
 | `cooldownMs`                | `86400000`    | Pause auto-apply after an apply failure                                          |
