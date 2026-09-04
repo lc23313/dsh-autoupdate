@@ -107,7 +107,7 @@ fetch(location.origin + "/dsh-autoupdate/autoupdate/check", {
 - **并发防护**：组件内 `seq` 引用计数——每次请求自增，响应回来时序号不匹配直接丢弃（连续点击/关闭后再返回都不会写脏状态）。
 - **后端并发防护**：`checkForUi` 复用 `_checking` 锁，重复点击返回"已有检测正在进行"。
 - **armed 之后**：更新在 dsh 进程退出后由 detached helper 执行（v1.0.0 原有事务：安装→双验证→失败回滚→断路器记账），UI 不做安装，只做排定。
-- **通道缺席降级**：挂载时 `autoupdate/status` 失败 → 按钮置灰，显示"更新服务不可用…可手动执行 npm install -g …"——UI 坏了也不误导用户。
+- **通道暂时不可用**：挂载时 `autoupdate/status` 失败会显示提示，仍允许点击检查重试；明确禁用的插件以及正在执行的操作才会禁用按钮。
 
 ## 5. 抗破坏性设计（UI 部分）
 

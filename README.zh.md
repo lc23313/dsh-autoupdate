@@ -35,6 +35,16 @@ dsh-autoupdate/
 
 ## 一、安装嵌入步骤
 
+v1.1.3 修复版的本地安装（在本项目目录执行）：
+
+```powershell
+dsh plugin --profile web add ./dsh-autoupdate-1.1.3.tgz
+```
+
+重启 dsh 后进入设置 → 自动更新 → 检查更新。确认更新后须退出 **dsh 进程**，只关闭浏览器页面不会触发安装。等待 `helper-result.json` 出现 `phase: "done"` 后再启动 dsh。
+
+自动应用需要能定位到运行中的 npm 全局安装。源码启动或无法确定安装前缀时会报错，请先确认 dsh 的安装方式。
+
 通过 dsh 官方插件通道装进任意 profile，三种来源任选其一：
 
 ```bash
@@ -46,7 +56,7 @@ dsh plugin --profile web add github:lc23313/dsh-autoupdate
 
 # ③ 从源码目录 / 离线 tarball 安装（pnpm 以本地路径链接，源目录须长期存在）
 dsh plugin --profile web add /path/to/dsh-autoupdate
-dsh plugin --profile web add /path/to/dsh-autoupdate-1.1.0.tgz
+dsh plugin --profile web add /path/to/dsh-autoupdate-1.1.3.tgz
 ```
 
 dsh 会：初始化 profile 工作区 → pnpm 安装该包 → 因其 `package.json` 声明了 `dsh.bundle.patch`，自动把它加入 `dsh.profile.bundles` 层列表。
@@ -64,7 +74,7 @@ dsh --dump-config --profile web | grep -A3 "auto-update"
 
 ```bash
 dsh web
-# 启动 30 秒后进行首次检测；此后每 6 小时一次
+# 默认在设置 → 自动更新中点击检查更新；autoCheck: true 时才会自动定期检测
 cat ~/.dsh/plugins-data/dsh-autoupdate/autoupdate.log   # 查看运行日志（Windows: type）
 ```
 
@@ -129,7 +139,7 @@ DSH_AUTOUPDATE_DOCTOR=1 dsh web
 | 查看日志     | `cat ~/.dsh/plugins-data/dsh-autoupdate/autoupdate.log`                                                                          |
 | 重置断路器    | 删除 `state.json`（或把配置 `maxConsecutiveFailures` 调大后重启）                                                                             |
 | 手动回滚     | `npm install -g @deepseek-ai/dsh@<旧版本>`                                                                                          |
-| 立即检查     | 重启 dsh（启动后 30 秒首检），或临时调小 `startupDelayMs`                                                                                        |
+| 立即检查     | 设置 → 自动更新 → 检查更新                                                                                        |
 | 临时禁用自动应用 | 配置 `autoApply: false`（保留检测与通知）                                                                                                   |
 | 彻底卸载     | `dsh plugin --profile web remove dsh-autoupdate`，再删除 `~/.dsh/plugins-data/dsh-autoupdate`（及本地源码目录）                               |
 
@@ -147,7 +157,7 @@ DSH_AUTOUPDATE_DOCTOR=1 dsh web
 
 ```bash
 node scripts/dev-smoke.mjs          # 端到端冒烟：真实检测流程（强制 autoApply=false，零副作用）
-node --check lib/*.js scripts/*.mjs # 语法检查
+npm test                          # 离线回归测试 + UI 冒烟测试
 npm pack                            # 生成离线安装包 dsh-autoupdate-<版本>.tgz
 ```
 
@@ -156,7 +166,7 @@ npm pack                            # 生成离线安装包 dsh-autoupdate-<版�
 ## 七、已知限制
 
 1. **多实例并发**：helper 只等待武装它的那个 dsh 进程退出；若另一个 dsh 实例仍在运行且锁住全局目录，npm 安装会失败重试（×3，间隔递增），最终失败则记入断路器，下个周期重试。
-2. **长期离线**：网络不可达只计"检查失败"；连续 6 次后降级为 off 静默（恢复联网后一次成功检查即自动复位为 auto）。
+2. **长期离线**：网络不可达只计"检查失败"；连续 6 次后降级为 off 静默（定期探测恢复联网后解除检查失败导致的降级）。
 3. **headless 一次性任务**：进程存活时间可能短于 `startupDelayMs`（30s），首检来不及执行；此类场景请把 `startupDelayMs` 调到 5000 以下。
 
 抗破坏性更新（接口变更/结构改动/大版本重构下的存活策略）完整设计见 **docs/COMPATIBILITY.zh.md**。

@@ -21,9 +21,9 @@ Object.defineProperty(globalThis, "navigator", {
 const TITLE_RE = /检查更新|Check for Updates/;
 
 let failures = 0;
-const step = (name, fn) => {
+const step = async (name, fn) => {
   try {
-    fn();
+    await fn();
     console.log(`PASS  ${name}`);
   } catch (e) {
     failures++;
@@ -44,7 +44,7 @@ globalThis.window = {
 await import("../lib/client.js");
 
 let factory;
-step("A1 client module registers with id dsh-autoupdate", () => {
+await step("A1 client module registers with id dsh-autoupdate", () => {
   factory = registered.get("dsh-autoupdate");
   assert.ok(factory, "no factory registered");
 });
@@ -62,7 +62,7 @@ const fakeRequire = (name) => {
 };
 
 let exports_;
-step("A2 factory materializes and exports apply/inject", () => {
+await step("A2 factory materializes and exports apply/inject", () => {
   exports_ = factory(fakeRequire);
   assert.equal(typeof exports_.apply, "function");
   assert.deepEqual(exports_.inject, ["slots", "locale"]);
@@ -87,7 +87,7 @@ const ctx = {
   },
 };
 
-step("A3 apply() registers a settings.section entry (id dsh-autoupdate)", () => {
+await step("A3 apply() registers a settings.section entry (id dsh-autoupdate)", () => {
   exports_.apply(ctx);
   assert.equal(slotRegistrations.length, 1);
   const { options } = slotRegistrations[0];
@@ -98,7 +98,7 @@ step("A3 apply() registers a settings.section entry (id dsh-autoupdate)", () => 
 });
 
 // ---------- B. component renders with fallbacks ----------
-step("B1 section renders without t prop (fallback dictionary)", () => {
+await step("B1 section renders without t prop (fallback dictionary)", () => {
   const Section = slotRegistrations[0].component;
   const tree = Section({});
   assert.ok(tree && tree.type === "div", "root element missing");
@@ -107,7 +107,7 @@ step("B1 section renders without t prop (fallback dictionary)", () => {
   assert.ok(!json.includes("undefined"), "no undefined leaks");
 });
 
-step("B2 section renders when t throws", () => {
+await step("B2 section renders when t throws", () => {
   const Section = slotRegistrations[0].component;
   const tree = Section({ t: () => { throw new Error("locale broken"); } });
   const json = JSON.stringify(tree);
@@ -124,21 +124,21 @@ const mkUpdater = (over = {}) => ({
   ...over,
 });
 
-step("C1 status endpoint returns ok envelope value", async () => {
+await step("C1 status endpoint returns ok envelope value", async () => {
   const handler = createUpdateHandler(mkUpdater());
   const r = await handler("autoupdate/status", {});
   assert.equal(r.ok, true);
   assert.equal(r.value.installedVersion, "0.1.1-rc.2");
 });
 
-step("C2 check endpoint up-to-date", async () => {
+await step("C2 check endpoint up-to-date", async () => {
   const handler = createUpdateHandler(mkUpdater());
   const r = await handler("autoupdate/check", {});
   assert.equal(r.ok, true);
   assert.equal(r.value.state, "up-to-date");
 });
 
-step("C3 check endpoint update-available", async () => {
+await step("C3 check endpoint update-available", async () => {
   const handler = createUpdateHandler(
     mkUpdater({ checkForUi: async () => ({ state: "update-available", current: "0.1.1-rc.2", latest: "0.1.2", channel: "latest" }) }),
   );
@@ -147,7 +147,7 @@ step("C3 check endpoint update-available", async () => {
   assert.equal(r.value.latest, "0.1.2");
 });
 
-step("C4 check failure becomes structured error (never throws)", async () => {
+await step("C4 check failure becomes structured error (never throws)", async () => {
   const handler = createUpdateHandler(mkUpdater({ checkForUi: async () => { throw new Error("network down"); } }));
   const r = await handler("autoupdate/check", {});
   assert.equal(r.ok, false);
@@ -155,21 +155,21 @@ step("C4 check failure becomes structured error (never throws)", async () => {
   assert.match(r.error.message, /network down/);
 });
 
-step("C5 apply endpoint validates and arms", async () => {
+await step("C5 apply endpoint validates and arms", async () => {
   const handler = createUpdateHandler(mkUpdater());
   const r = await handler("autoupdate/apply", { targetVersion: "0.1.2" });
   assert.equal(r.ok, true);
   assert.equal(r.value.armed, true);
 });
 
-step("C6 apply failure becomes structured error", async () => {
+await step("C6 apply failure becomes structured error", async () => {
   const handler = createUpdateHandler(mkUpdater({ armFromUi: async () => { throw new Error("目标版本与检测结果不一致"); } }));
   const r = await handler("autoupdate/apply", { targetVersion: "0.1.2" });
   assert.equal(r.ok, false);
   assert.equal(r.error.code, "apply-failed");
 });
 
-step("C7 unknown endpoint rejected cleanly", async () => {
+await step("C7 unknown endpoint rejected cleanly", async () => {
   const handler = createUpdateHandler(mkUpdater());
   const r = await handler("bogus/endpoint", {});
   assert.equal(r.ok, false);

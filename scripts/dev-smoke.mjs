@@ -17,7 +17,11 @@ process.env.DSH_HOME = home;
 const { name, apply } = await import("../lib/index.js");
 
 const logs = [];
+let channelHandler;
 const ctx = {
+  inject(_services, callback) {
+    callback({ connection: { rpc: { handle(_channel, handler) { channelHandler = handler; } } } });
+  },
   logger: {
     info: (...a) => logs.push(["info", a.join(" ")]),
     warn: (...a) => logs.push(["warn", a.join(" ")]),
@@ -31,20 +35,24 @@ const ctx = {
 await apply(ctx, {
   enabled: true,
   autoApply: false, // smoke test never arms the update helper
-  autoCheck: true, // v1.1.0: explicitly exercise the periodic-check path
+  autoCheck: false,
   startupDelayMs: 200,
   checkIntervalMs: 3600000,
   logToConsole: true,
 });
 
-// Give the startup check (spawn npm view etc.) time to complete.
-await new Promise((r) => setTimeout(r, 20000));
+// Await the real operation: registry retries can take longer than 20 seconds.
+const checked = await channelHandler?.("autoupdate/check", {});
 
 try {
   ctx._dispose?.();
 } catch {}
 
 let pass = true;
+if (!checked?.ok) {
+  console.error("SMOKE FAIL:", checked?.error?.message ?? "UI channel not registered");
+  pass = false;
+}
 const state = JSON.parse(readFileSync(join(home, "plugins-data", "dsh-autoupdate", "state.json"), "utf8"));
 const log = readFileSync(join(home, "plugins-data", "dsh-autoupdate", "autoupdate.log"), "utf8");
 
@@ -56,7 +64,7 @@ console.log("\n=== autoupdate.log ===");
 console.log(log);
 
 if (name !== "dsh-autoupdate") pass = false;
-if (!state.lastCheckAt) {
+if (!state.lastCheckAt || state.lastCheckOk !== true) {
   console.error("SMOKE FAIL: no check completed (lastCheckAt is unset)");
   pass = false;
 }

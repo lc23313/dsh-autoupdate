@@ -37,3 +37,7 @@ jobs:
       - name: UI smoke test (client module + channel handler, offline)
         timeout-minutes: 1
         run: node scripts/ui-smoke.mjs
+
+      - name: Offline update and rollback regression tests
+        timeout-minutes: 2
+        run: node --test tests/client.test.mjs tests/regression.test.mjs

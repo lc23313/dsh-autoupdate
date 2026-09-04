@@ -22,7 +22,6 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
-  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -44,10 +43,10 @@ const parentPid = Number(argValue("--parent-pid") ?? 0);
 const target = argValue("--target");
 const from = argValue("--from");
 const npmCmd = argValue("--npm") || "npm";
-const dshCmd = argValue("--dsh") || "dsh";
 const installTimeout = Number(argValue("--install-timeout") ?? 300000);
 const registry = argValue("--registry") || "";
 const prefix = argValue("--prefix") || "";
+const armId = argValue("--arm-id");
 const updateProfiles = (argValue("--update-profiles") || "")
   .split(",")
   .map((s) => s.trim())
@@ -63,19 +62,16 @@ function fail(message, code = 2) {
   process.exit(code);
 }
 
-if (!stateDir || !target || !from || !parentPid) {
-  fail("missing required args (--state-dir/--target/--from/--parent-pid)");
+if (!stateDir || !target || !from || !Number.isInteger(parentPid) || parentPid <= 0 || !prefix) {
+  fail("missing required args (--state-dir/--target/--from/--parent-pid/--prefix)");
 }
 
 // ---- tolerant JSON io ----
 function writeJsonAtomic(file, data) {
   try {
     mkdirSync(dirname(file), { recursive: true });
-    const tmp = `${file}.tmp`;
+    const tmp = `${file}.${process.pid}.tmp`;
     writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
-    try {
-      if (existsSync(file)) unlinkSync(file);
-    } catch {}
     renameSync(tmp, file);
   } catch {}
 }
@@ -92,6 +88,7 @@ function result(patch) {
   writeJsonAtomic(RESULT_FILE, {
     at: Date.now(),
     parentPid,
+    armId,
     from,
     to: target,
     ...patch,
@@ -127,7 +124,7 @@ function run(cmd, args, timeoutMs = 300000) {
   return new Promise((resolve) => {
     let child;
     try {
-      if (IS_WIN) {
+      if (IS_WIN && !/\.exe$/i.test(cmd)) {
         const line = [cmd, ...args].map(quoteWinArg).join(" ");
         child = spawn(line, {
           shell: true,
@@ -187,19 +184,17 @@ async function verifyInstall(expectedVersion) {
   const targetPrefix = prefix || null;
   try {
     const pkgDir = targetPrefix
-      ? join(targetPrefix, "node_modules", "@deepseek-ai", "dsh")
+      ? join(targetPrefix, ...(IS_WIN ? [] : ["lib"]), "node_modules", "@deepseek-ai", "dsh")
       : null;
     if (!pkgDir || !existsSync(join(pkgDir, "package.json"))) {
-      // No prefix pin: fall back to PATH `dsh --version`.
-      const v = await dshVersion();
-      return v === expectedVersion ? { ok: true, detail: "dsh --version" } : { ok: false, detail: `dsh --version says ${v}` };
+      return { ok: false, detail: "manifest missing at the pinned prefix" };
     }
     const manifest = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
     if (manifest.version !== expectedVersion) {
       return { ok: false, detail: `manifest version is ${manifest.version}` };
     }
-    const binRel = manifest.bin && manifest.bin.dsh;
-    if (!binRel) return { ok: true, detail: "manifest verified" };
+    const binRel = typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.dsh;
+    if (!binRel) return { ok: false, detail: "dsh bin entry missing" };
     const r = await run(process.execPath, [join(pkgDir, binRel), "--version"], 30000);
     const m = r.stdout.match(VERSION_RE);
     if (!r.ok || !m || m[0] !== expectedVersion) {
@@ -211,28 +206,23 @@ async function verifyInstall(expectedVersion) {
   }
 }
 
-async function dshVersion() {
-  for (let i = 0; i < 3; i++) {
-    const r = await run(dshCmd, ["--version"], 30000);
-    const m = r.stdout.match(VERSION_RE);
-    if (m) return m[0];
-    await sleep(3000);
-  }
-  return null;
+function ownsArm() {
+  const h = readJson(STATE_FILE)?.helper;
+  return h?.armed && h.targetVersion === target && h.parentPid === parentPid
+    && (!armId || h.armId === armId);
 }
 
-async function waitParentExit(pid, maxMs = 60 * 60 * 1000) {
-  const start = Date.now();
+async function waitParentExit(pid) {
   for (;;) {
+    if (!ownsArm()) return false;
     let alive = false;
     try {
       process.kill(pid, 0);
       alive = true;
-    } catch {
-      alive = false;
+    } catch (e) {
+      alive = e.code !== "ESRCH";
     }
     if (!alive) return true;
-    if (Date.now() - start > maxMs) return false;
     await sleep(500);
   }
 }
@@ -262,7 +252,12 @@ async function refreshProfiles() {
         } catch {}
       }
     }
-    const r = await run(dshCmd, ["plugin", "--profile", profile, "update"], installTimeout);
+    const pkgDir = join(prefix, ...(IS_WIN ? [] : ["lib"]), "node_modules", "@deepseek-ai", "dsh");
+    const manifest = readJson(join(pkgDir, "package.json"));
+    const bin = typeof manifest?.bin === "string" ? manifest.bin : manifest?.bin?.dsh;
+    if (!bin) return { ok: false, profiles: res.profiles, error: "updated dsh bin entry missing" };
+    const commandArgs = [join(pkgDir, bin), "plugin", "--profile", profile];
+    const r = await run(process.execPath, [...commandArgs, "update"], installTimeout);
     if (!r.ok) {
       for (const f of saved) {
         try {
@@ -270,7 +265,7 @@ async function refreshProfiles() {
         } catch {}
       }
       // Resync node_modules against the restored manifests.
-      await run(dshCmd, ["plugin", "--profile", profile, "install"], installTimeout);
+      await run(process.execPath, [...commandArgs, "install"], installTimeout);
       res.ok = false;
       res.error = `pnpm update failed for profile "${profile}" (${tail(r.stderr || r.stdout)}); manifests restored from backup`;
       continue;
@@ -281,23 +276,23 @@ async function refreshProfiles() {
 }
 
 // ---- main transaction ----
+if (!ownsArm()) process.exit(0);
 result({ phase: "waiting" });
 const exited = await waitParentExit(parentPid);
 if (!exited) {
-  result({ phase: "failed", error: "parent dsh process still alive after wait budget; aborting to avoid file-lock corruption" });
-  fail("parent still alive", 2);
+  // A superseded helper must not overwrite the active helper's result.
+  process.exit(0);
 }
 
 // Re-confirm the arm: the plugin may have re-armed to a newer target, or
 // cancelled, while we were waiting.
-const state = readJson(STATE_FILE);
-if (!state?.helper?.armed || state.helper.targetVersion !== target) {
-  result({ phase: "aborted", reason: "state no longer armed for this target (superseded or cancelled)" });
+if (!ownsArm()) {
   process.exit(0);
 }
 
 // Small grace period for the OS to finish releasing file handles.
 await sleep(2000);
+if (!ownsArm()) process.exit(0);
 
 result({ phase: "installing" });
 let install = await npmInstallGlobal(target);
@@ -312,7 +307,7 @@ if (!install.ok) {
   if (!intact.ok) {
     await npmInstallGlobal(from);
     const back = await verifyInstall(from);
-    result({ phase: "rolled-back", error: `install failed (${tail(install.stderr)}); previous version restored (${back.ok ? "verified" : "unverified"})` });
+    result({ phase: back.ok ? "rolled-back" : "failed", error: `install failed (${tail(install.stderr)}); previous version ${back.ok ? "restored and verified" : "restore failed: " + back.detail}` });
   } else {
     result({ phase: "failed", error: `install failed: ${tail(install.stderr)}` });
   }
@@ -325,7 +320,7 @@ if (!verify.ok) {
   await npmInstallGlobal(from);
   const back = await verifyInstall(from);
   result({
-    phase: "rolled-back",
+    phase: back.ok ? "rolled-back" : "failed",
     error: `verification failed (${verify.detail}); previous version ${back.ok ? "restored and verified" : "restore unverified"}`,
   });
   process.exit(0);

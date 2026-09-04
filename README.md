@@ -18,6 +18,8 @@ A built-in auto-update plugin for [dsh](https://github.com/deepseek-ai/deepseek-
 
 ## Install
 
+For the local v1.1.3 fix, run `dsh plugin --profile web add ./dsh-autoupdate-1.1.3.tgz` from this project and restart dsh. Check and confirm in Settings → Updates, then exit the **dsh process** (closing the browser is insufficient). Wait for `helper-result.json` to report `phase: "done"` before restarting. Automatic application requires a discoverable npm global installation; an unknown prefix is rejected.
+
 Install into any dsh profile through the official plugin channel:
 
 ```bash
@@ -28,7 +30,7 @@ dsh plugin --profile web add dsh-autoupdate
 dsh plugin --profile web add github:lc23313/dsh-autoupdate
 
 # from a local tarball (offline sharing)
-dsh plugin --profile web add /path/to/dsh-autoupdate-1.1.0.tgz
+dsh plugin --profile web add /path/to/dsh-autoupdate-1.1.3.tgz
 ```
 
 Verify it was registered as a profile layer, then restart dsh:
@@ -37,7 +39,7 @@ Verify it was registered as a profile layer, then restart dsh:
 dsh --dump-config --profile web   # should list the auto-update row (name: dsh-autoupdate)
 ```
 
-The plugin starts checking 30 s after boot, then every 6 hours. State and logs live in `$DSH_HOME/plugins-data/dsh-autoupdate/` (default `~/.dsh/`).
+By default, open Settings → Updates and click Check for updates. With autoCheck: true, checks run 30 seconds after boot and every 6 hours. State and logs live in `$DSH_HOME/plugins-data/dsh-autoupdate/` (default `~/.dsh/`).
 
 ## Configuration
 
@@ -109,13 +111,13 @@ Before installing any plugin that can run package installs, you should know exac
 ## Known limitations
 
 1. **Concurrent dsh instances**: the helper waits only for the arming process; if another instance still holds locks, npm fails and retries ×3, then defers to the next cycle (circuit breaker counts it).
-2. **Long offline periods**: 6 consecutive check failures silence the plugin (`off`); the first successful check after reconnect restores `auto`.
+2. **Long offline periods**: 6 consecutive check failures silence the plugin (`off`); periodic recovery probes resume checks after reconnect; successful checks clear check-failure degradation.
 3. **One-shot headless runs** may exit before the first check; lower `startupDelayMs` for those workflows.
 
 ## Development
 
 ```bash
-node --check lib/*.js scripts/*.mjs   # syntax check
+npm test                            # offline regression and UI tests
 node scripts/dev-smoke.mjs            # end-to-end smoke test (real detection, autoApply forced off, zero side effects)
 ```
 
